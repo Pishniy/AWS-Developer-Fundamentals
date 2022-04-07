@@ -1,0 +1,70 @@
+Description: "Creating single ec2 instance in default VPC with ssh access"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: "LohikaProd"
+
+  MyDefaultVPC:
+    Type: String
+    Default: "vpc-e687369e"
+
+  Ec2InstanceAmi:
+    Type: String
+    Default: "ami-00ee4df451840fa9d"
+  
+  Ec2InstanceType:
+    Type: String
+    Default: "t2.micro"
+
+  Ec2InstanceSshKeyName:
+    Type: String
+    Default: "Stas_us-west-2"
+
+
+Resources:
+# #============= Secyrity Groups ==================
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: "Allow Only ssh access"
+      GroupName: "SSH access"
+      VpcId: !Ref MyDefaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: "SSH access"
+        - Key: Env
+          Value: !Ref Environment
+
+# #============= EC2 ==================
+  WebSwerver:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref Ec2InstanceAmi
+      InstanceType: !Ref Ec2InstanceType
+      KeyName: !Ref Ec2InstanceSshKeyName
+      SecurityGroupIds:
+        - !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: "WebServer"
+        - Key: Env
+          Value: !Ref Environment
+
+
+#============= Outputs ==================
+
+Outputs:
+  WebServerPublicIP:
+    Description: WebServer Public IP
+    Value: !GetAtt WebSwerver.PublicIp
