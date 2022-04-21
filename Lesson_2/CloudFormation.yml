@@ -1,0 +1,158 @@
+Description: "Creating ASG with ec2 instance in default VPC with ssh and Http/s access"
+
+Parameters:
+  Environment:
+    Type: String
+    Default: "LohikaProd"
+
+  MyDefaultVPC:
+    Type: String
+    Default: "vpc-e687369e"
+
+  Ec2InstanceAmi:
+    Type: String
+    Default: "ami-00ee4df451840fa9d"
+  
+  Ec2InstanceType:
+    Type: String
+    Default: "t2.micro"
+
+  Ec2InstanceSshKeyName:
+    Type: String
+    Default: "Stas_us-west-2"
+
+  UsWest2aSubnet:
+    Type: String
+    Default: "subnet-7f89a534"
+
+  UsWest2bSubnet:
+    Type: String
+    Default: "subnet-457c7e3c"
+
+
+
+Resources:
+# #============= Secyrity Groups ==================
+  WebServerSshSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: "Allow Only ssh access"
+      GroupName: "SSH access"
+      VpcId: !Ref MyDefaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: "SSH access"
+        - Key: Env
+          Value: !Ref Environment
+
+  WebServerHttpSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: "Allow Only http access"
+      GroupName: "Http access"
+      VpcId: !Ref MyDefaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: "Http access"
+        - Key: Env
+          Value: !Ref Environment
+
+  WebServerHttpsSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: "Allow Only httpS access"
+      GroupName: "HttpS access"
+      VpcId: !Ref MyDefaultVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: "HttpS access"
+        - Key: Env
+          Value: !Ref Environment
+
+#============= LT ==================
+  WebServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    # DependsOn: WebServerSshSG
+    Properties:
+      LaunchTemplateName: WebServer
+      LaunchTemplateData:
+        ImageId: !Ref Ec2InstanceAmi
+        InstanceType: !Ref Ec2InstanceType
+        KeyName: !Ref Ec2InstanceSshKeyName
+        SecurityGroupIds:
+          - !Ref WebServerSshSG
+          - !Ref WebServerHttpSG
+          - !Ref WebServerHttpsSG
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
+            Ebs:
+              DeleteOnTermination: 'true'
+              VolumeSize: 8
+              VolumeType: gp2
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              sudo yum update
+              sudo yum -y install java-1.8.0-openjdk
+        TagSpecifications:
+        - ResourceType: instance
+          Tags:
+          - Key: Name
+            Value: "MyWebServerASG"
+          - Key: Env
+            Value: !Ref Environment
+        - ResourceType: volume
+          Tags:
+          - Key: Name
+            Value: "MyWebServerASG"
+          - Key: Env
+            Value: !Ref Environment
+
+#============= ASG ==================
+
+  WebServerASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: WebServerLaunchTemplate
+    Properties:
+      VPCZoneIdentifier:
+      - !Ref UsWest2aSubnet
+      - !Ref UsWest2bSubnet
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      MaxSize: '4'
+      MinSize: '2'
+      DesiredCapacity: '2'
+
+   
